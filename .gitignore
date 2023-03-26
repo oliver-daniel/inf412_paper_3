@@ -1,3 +1,5 @@
 a3_*/
 data/*
 !data/*.gitkeep
+.log
+.tex
