@@ -1,0 +1,179 @@
+```{r}
+data.all |>
+    count(start_date) |>
+    ggplot(aes(x = start_date, y = n)) +
+    geom_col() +
+    geom_smooth()
+```
+
+```{r}
+data.all |>
+    ggplot(aes(x = start_date, y = after_stat(density))) +
+    geom_histogram(bins = 52, aes(fill = `User Type`)) +
+    geom_density(position = "stack", bw = 52, aes(group = `User Type`))
+```
+```{r}
+data.all |>
+    count(start_time) |>
+    ggplot(aes(x = start_time, y = n)) +
+    geom_col() +
+    geom_smooth()
+```
+
+```{r}
+month_model <- data.all |>
+    mutate(
+        start_month = lubridate::month(start_date, label = T),
+    ) |>
+    count(start_month) |>
+    glm(formula = n ~ 0 + start_month, family = poisson)
+
+tod_model <- data.all |>
+    mutate(
+        start_hour = as.factor(lubridate::hour(start_time))
+    ) |>
+    count(start_hour) |>
+    glm(formula = n ~ 0 + start_hour, family = poisson)
+
+combined_model <- data.all |>
+    mutate(
+        start_month = lubridate::month(start_date, label = T),
+        start_hour = as.factor(lubridate::hour(start_time)),
+        user_type = `User Type`
+    ) |>
+    count(start_month, start_hour, user_type) |>
+    glm(
+        formula = n ~ 0 + start_month + start_hour + user_type,
+        family = poisson
+    )
+
+predict(combined_model,
+    newdata = data.frame(
+        start_month = "Jul",
+        start_hour = "17",
+        user_type = "Annual Member"
+    ),
+    type = "response"
+)
+```
+```{r}
+
+data.all |>
+    mutate(
+        start_month = lubridate::month(start_date, label = T),
+        start_hour = as.factor(lubridate::hour(start_time)),
+        user_type = `User Type`
+    ) |>
+    group_by(start_month, start_hour, user_type) |>
+    ggplot(aes(y = fct_rev(start_month), x = start_hour)) +
+    geom_bin2d() +
+    scale_fill_viridis_c() +
+    facet_wrap(~user_type, scales = "free")
+
+
+expand.grid(
+    month = month.abb,
+    hour = as.character(0:23),
+    user_type = c("Annual Member", "Casual Member")
+) |>
+    as_tibble() |>
+    mutate(
+        predicted = predict(
+            combined_model,
+            newdata = data.frame(
+                start_month = month,
+                start_hour = hour,
+                user_type = user_type
+            ),
+            type = "response"
+        )
+    ) |>
+    ggplot(aes(y = fct_rev(month), x = hour, fill = predicted)) +
+    geom_tile() +
+    scale_fill_viridis_c() +
+    facet_wrap(~user_type, scales = "free")
+
+# data.all |>
+#     #sample_n(500) |>
+#     mutate(
+#         start_month = lubridate::month(start_date, label = T),
+#         start_hour = as.factor(lubridate::hour(start_time)),
+#         user_type = `User Type`
+#     ) |>
+#     group_by(start_month, start_hour, user_type) |>
+#     group_keys() |>
+#     summarize(predicted = predict(
+#         combined_model,
+#         newdata = data.frame(
+#             start_month = start_month,
+#             start_hour = start_hour,
+#             user_type = user_type
+#         ),
+#         type="response",
+#         .group
+#     ))
+
+# model <- glm(n ~ lubridate::month(start_date, label=T), family=poisson, data=data.all)
+```
+
+```{r}
+data.all |>
+    mutate(
+        start_month = lubridate::month(start_date, label = T),
+        start_hour = as.factor(lubridate::hour(start_time)),
+        user_type = `User Type`
+    ) |>
+    group_by(start_month, start_hour, user_type) |>
+    ggplot(aes(x = start_hour)) +
+    geom_histogram(stat = "count") +
+    facet_grid(start_month ~ user_type)
+
+expand.grid(
+    month = month.abb,
+    hour = as.character(0:23),
+    user_type = c("Annual Member", "Casual Member")
+) |>
+    as_tibble() |>
+    mutate(
+        predicted = predict(
+            combined_model,
+            newdata = data.frame(
+                start_month = month,
+                start_hour = hour,
+                user_type = user_type
+            ),
+            type = "response"
+        )
+    ) |>
+    ggplot(aes(x = hour, y = predicted, fill = user_type)) +
+    geom_col(position = "identity", show.legend = FALSE) +
+    facet_wrap(~month, ncol = 1, strip.position = "right")
+```
+
+```{r}
+summary(combined_model)$coefficients |> knitr::kable()
+```
+
+```{r}
+df |>
+    filter(user_type == "Annual Member" & month == "Nov") |>
+    nrow() -
+    df |>
+    filter(user_type == "Casual Member" & month == "Nov") |>
+    nrow()
+
+df |>
+    filter(user_type == "Casual Member") |>
+    count(month) |>
+    inner_join(
+        df |>
+            filter(user_type == "Annual Member") |>
+            count(month),
+        by = "month",
+        suffix = c(".casual", ".annual")
+    ) |>
+    mutate(
+        diff = n.annual - n.casual
+    )
+```
+
