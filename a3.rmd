@@ -8,11 +8,18 @@ bibliography: '.bib'
 link-citations: true
 output:
   bookdown::html_document2:
-    fig_caption: yes
+    number_sections: false
+    fig_caption: true
   bookdown::pdf_document2:
-    fig_caption: yes
+    number_sections: false
+    fig_caption: true
     toc: true
     toc_depth: 4
+header-includes:
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+  - \floatplacement{table}{H}
+
 ---
 
 ```{r setup, echo=FALSE}
@@ -20,7 +27,9 @@ knitr::opts_chunk$set(
     echo = FALSE,
     message = FALSE,
     warning = FALSE,
-    cache = TRUE
+    cache = TRUE,
+    out.width = "100%",
+    out.align = "center"
 )
 ```
 
@@ -86,6 +95,7 @@ For the purposes of this assignment, a **Poisson regression** shall be used, to 
 Poissonian models are useful for predicting the total **count of independent events** that might occur as of a particular point in time. We assume that all bike trips taken throughout Toronto are independent of one another, or at least insignificantly co-dependent. Here, our dependent variable is indeed count data – a total number of trips taken – so a Poisson regression is a useful model for our prediction.
 
 ## 4. Variable Distributions
+
 ```{r distribCount, fig.cap="Distribution of 2021 City Bike rentals by week"}
 df |>
     ggplot(aes(x = start)) +
@@ -101,7 +111,7 @@ df |>
     )
 ```
 
-```{r distribUserType, fig.cap = "Distribution of user type in 2021 City Bike rentals"}
+```{r distribUserType, fig.cap="Distribution of user type in 2021 City Bike rentals"}
 df |>
     ggplot(aes(x = user_type)) +
     geom_histogram(stat = "count") +
@@ -114,11 +124,14 @@ df |>
 ## 5. Correlational Diagrams
 
 The correlation of our three independent variables to city bike count can be succinctly visualized as follows:
+
 ```{r distribStartTime, fig.cap="Distribution of 2021 City Bike rentals by month, time of day, and member type"}
 df |>
     count(month, hour, user_type) |>
     ggplot(aes(x = hour, y = n)) +
     geom_col() +
+    scale_x_discrete(breaks = seq(0, 24, 2)) +
+    scale_y_continuous(breaks = c(0, 3E4), guide = guide_axis(check.overlap = TRUE)) +
     facet_grid(month ~ user_type) +
     labs(
         x = "Hour of day at rental",
@@ -163,7 +176,7 @@ Looking at the above figures, it seems visually that the date and time of rental
 
 However, the month and user type appear to apply something of a static multiplier to each of these distributions. Although they are not likely to be perfectly linear across their enumeration, the impact that, say, being a casual vs. annual member has on total rentals in April appears more linear.
 
-
+\newpage
 ## 7. Regression analysis
 ```{r echo=TRUE}
 combined_model <- df |>
@@ -190,8 +203,8 @@ predicted_rentals <- function(month, hour, user_type) {
     )
 }
 ```
-\newpage
 
+\newpage
 ## 8. Coefficient exponentiation
 
 ```{r echo=TRUE}
@@ -215,7 +228,7 @@ The patterns of these coefficients across different levels of each variable rese
 The summary table for the regression in [7. Regression Analysis] calculates that the *p*-value for every row is less than $2 \times {10}^{-16}$, meaning that each value of each variable is a highly significant predictor of rental rates. Calculating a simple McFadden's pseudo-$R^2$ for a rough approximation of goodness of fit yields:
 
 ```{r, echo=TRUE}
-mcfadden_r2 <- with(summary(combined_model), 1 - deviance/null.deviance)
+mcfadden_r2 <- with(summary(combined_model), 1 - deviance / null.deviance)
 mcfadden_r2
 ```
 
@@ -236,21 +249,23 @@ predictions <- option_grid |>
 ```
 ```{r heatmaps, fig.cap="Comparison of real vs. predicted data for 2021 City Bike rentals"}
 (df |>
-    group_by(hour, month, user_type) |>
-    ggplot(aes(x = hour, y = fct_rev(month))) +
-    geom_bin2d() +
+    count(hour, month, user_type) |>
+    ggplot(aes(x = hour, y = fct_rev(month), fill = n)) +
+    geom_tile() +
     scale_fill_viridis_c(option = "magma") +
+    scale_x_discrete(breaks = seq(0, 24, 2)) +
     facet_grid(~user_type, scales = "free") +
     labs(
         title = "Open Data Toronto data",
         x = "Hour of day",
-        y = "Month"
+        y = "Month",
     )
 ) /
     (predictions |>
         ggplot(aes(x = hour, y = fct_rev(month), fill = predicted)) +
         geom_tile() +
         scale_fill_viridis_c(option = "magma") +
+        scale_x_discrete(breaks = seq(0, 24, 2)) +
         facet_grid(~user_type, scales = "free") +
         labs(
             title = "Poisson model predictions",
